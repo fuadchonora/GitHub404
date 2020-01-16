@@ -11,6 +11,7 @@ body{
 #play-ground{
 	background: url('/images/map-1.jpeg');
     border: 1px solid black;
+    position: relative;
     width:800px;
     height:400px;
 }
@@ -26,7 +27,7 @@ body{
     background-position: center;
     background-repeat: no-repeat;
     background-size: cover;
-    position: relative;
+    position: absolute;
     width:40px;
     height:50px;
     transition: all 0.033s;
@@ -81,11 +82,11 @@ body{
 
     var socket = io();
     var playGround = document.getElementById('play-ground');
-    var PLAYERS = []; 
+    var PLAYERS = [];
     var myGameObject = {};
-    myGameObject.spx = 0.0; //speed position x
-    myGameObject.spy = 0.0; //speed position y
-    myGameObject.sr = 0.0; //speed rotation
+    myGameObject.spX = 0.0; //speed position x
+    myGameObject.spY = 0.0; //speed position y
+    myGameObject.spR = 0.0; //speed rotation
 
     class gameObject{
         constructor(id, color, position, rotation) {
@@ -169,6 +170,7 @@ body{
         myGameObject.rotation = players[myGameObject.id].rotation;
         updateMyObject();
         update();
+        gravitate();
     });
     socket.on('updatePositions',function(dataPack){
         //update positions
@@ -202,8 +204,9 @@ body{
                 let gameObject = document.getElementById(player.id);
                 var deg = player.rotation.x;
                 gameObject.style.transform  = "rotate("+deg+"deg)";
-                gameObject.style.left = player.position.x+"px";
-                gameObject.style.top  = player.position.y+"px";
+                // gameObject.style.left = player.position.x+"px";
+                // gameObject.style.top  = player.position.y+"px";
+                gameObject.style.transform = 'translate('+player.position.x+'px, '+player.position.y+'px)';
             }
         },1000/30);
     }
@@ -228,13 +231,31 @@ body{
 
     function updateMyObject(){
         setInterval(function(){
-            var distX = myGameObject.spx;
-            var distY = myGameObject.spy
+
+            if(myGameObject.position.x > 760){
+                //myGameObject.spX = 0;
+                myGameObject.position.x = 760;
+            }
+            if(myGameObject.position.x < 0){
+                //myGameObject.spX = 0;
+                myGameObject.position.x = 0;
+            }
+            if(myGameObject.position.y > 300){
+                //myGameObject.spY = 0;
+                myGameObject.position.y = 300;
+            }
+            if(myGameObject.position.y < 0){
+                //myGameObject.spY = 0;
+                myGameObject.position.y = 0;
+            }
+
+            var distX = myGameObject.spX;
+            var distY = myGameObject.spY
             var deg  = myGameObject.rotation.x + 90;
             myGameObject.position.x += distX//*Math.cos(deg+90 * Math.PI / 180);
             myGameObject.position.y += distY//*Math.sin(deg+90 * Math.PI / 180);
 
-            myGameObject.rotation.x += myGameObject.sr;
+            myGameObject.rotation.x += myGameObject.spR;
 
             let myPack = {
                 position : myGameObject.position,
@@ -244,75 +265,109 @@ body{
         },1000/30);
     }
 
-    function moveForward() {
-        if(myGameObject.sp>-2)
-            myGameObject.sp -= 2.0;
+    function gravitate(){
+        var spJ = 2/10;
+        var loop = setInterval(()=>{
+            myGameObject.spY += spJ;
+            if(myGameObject.position.y > 300){
+                myGameObject.spY = 0;
+                myGameObject.position.y = 300;
+                clearInterval(loop);
+            }
+        },1000/30); // 30 fps
     }
 
-    function moveBack() {
-        if(myGameObject.sp<2)
-            myGameObject.sp += 2.0;
-    }
+
+
+    // function moveForward() {
+    //     if(myGameObject.sp>-2)
+    //         myGameObject.sp -= 2.0;
+    // }
+
+    // function moveBack() {
+    //     if(myGameObject.sp<2)
+    //         myGameObject.sp += 2.0;
+    // }
 
     function moveUp() {
-        if(myGameObject.spy>-2)
-            myGameObject.spy -= 2.0;
+        if(myGameObject.spY>-2)
+            myGameObject.spY -= 2.0;
     }
 
     function moveDown() {
-        if(myGameObject.spy<2)
-            myGameObject.spy += 2.0;
+        if(myGameObject.spY<2)
+            myGameObject.spY += 2.0;
     }
 
     function moveRight() {
-        if(myGameObject.spx<2)
-            myGameObject.spx += 2.0;
+        if(myGameObject.spX<2)
+            myGameObject.spX += 2.0;
     }
 
     function moveLeft() {
-        if(myGameObject.spx>-2)
-            myGameObject.spx -= 2.0;
+        if(myGameObject.spX>-2)
+            myGameObject.spX -= 2.0;
     }
 
     function rotateRight() {
-        if(myGameObject.sr<2)
-            myGameObject.sr += 2.0;
+        if(myGameObject.spR<2)
+            myGameObject.spR += 2.0;
     }
 
     function rotateLeft() {
-        if(myGameObject.sr>-2)
-            myGameObject.sr -= 2.0;
+        if(myGameObject.spR>-2)
+            myGameObject.spR -= 2.0;
+    }
+
+    function jump(){
+        if(myGameObject.spY == 0){
+
+            myGameObject.spY -= 4;
+            var spJ = 2/10;
+
+            var loop = setInterval(()=>{
+                myGameObject.spY += spJ;
+                if(myGameObject.spY < 0){
+                    clearInterval(loop);
+                    gravitate();
+                }
+            },500/30); // 1 second jump time
+        }
     }
 
     document.addEventListener('keydown', (event) => {
         switch(event.keyCode){
-            case 38://||119||38:
+            case 87://||87||38:
                 moveUp();
                 break;
-            case 40://||115||40:
+            case 83://||83||40:
                 moveDown();
                 break;
-            case 39://||100||39:
+            case 68://||68||39:
                 moveRight();
                 break;
-            case 37://||97||37:
+            case 65://||65||37:
                 moveLeft();
+                break;
+            case 32://space:
+                jump();
                 break;
         }
     }, false);
 
     document.addEventListener('keyup', (event) => {
         switch(event.keyCode){
-            case 38:
+            case 87:
                 moveDown();
+                gravitate();
                 break;
-            case 40:
+            case 83:
                 moveUp();
                 break;
-            case 39:
+            case 68:
                 moveLeft();
                 break;
-            case 37:
+            case 65:
                 moveRight();
                 break;
         }
