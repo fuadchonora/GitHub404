@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+
+body{
+    background-color: white;
+    /* background-image: url("https://previews.123rf.com/images/vladimiroquai/vladimiroquai1601/vladimiroquai160100007/51915116-red-car-top-view.jpg"); */
+}
+
+#play-ground{
+	background-color:rgb(238, 238, 238);
+    /* background-image: url("https://previews.123rf.com/images/vladimiroquai/vladimiroquai1601/vladimiroquai160100007/51915116-red-car-top-view.jpg"); */
+    border: 1px solid black;
+    width:500px;
+    height:500px;
+}
+#myctx {
+	background-color:rgb(238, 238, 238);
+    /* background-image: url("https://previews.123rf.com/images/vladimiroquai/vladimiroquai1601/vladimiroquai160100007/51915116-red-car-top-view.jpg"); */
+    border: 1px solid black;
+    width:500px;
+    height:500px;
+}
+.game-object{
+	/* background-color:red; */
+    background-image: url("https://previews.123rf.com/images/vladimiroquai/vladimiroquai1601/vladimiroquai160100007/51915116-red-car-top-view.jpg");
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    position: relative;
+    width:30px;
+    height:20px;
+    transition: all 0.033s;
+}
+
+.hidden{
+    display: none;
+}
+
+</style>
+</head>
+
+<body>
+<div id='play-screen'>
+    <h2>Play Screen</h2>
+    <br><button onclick="leaveLobby()">Leave</button><br>>
+
+    <div id='play-ground'>
+        <div style="background-color: rebeccapurple; top: 250px; width: 200px; height: 20px;"></div>
+    </div>
+    <!-- <canvas id='myctx'></canvas> -->
+
+    <br>
+    <div style="text-align:center;width:480px;">
+        <button onclick="moveForward()">FORWARD</button><br><br>
+        <button onclick="rotateLeft()">LEFT</button>
+        <button onclick="rotateRight()">RIGHT</button><br><br>
+        <button onclick="moveBack()">BACK</button>
+    </div>
+    <br>
+    <p id = 'data'></p>
+</div>
+
+<div id='ready-screen'>
+    <h2>Ready Screen</h2>
+    <br><button onclick="readyToStart()">Ready</button><br>
+    <ul id='ready-list'><h4>Players Online</h4><br></ul>
+</div>
+<div id='menu-screen'>
+    <h2>Menu Screen</h2>
+    <ul id='player-list'><h4>Players</h4><br></ul>
+    <br>
+</div>
+
+<div id = 'logs'>Logs<br></div>
+
+<script src="https://cdn.socket.io/socket.io-1.4.5.js"></script>
+<script>
+
+    //let ctx  = document.getElementById('myctx').getContext("2d");
+    
+
+    var socket = io();
+    var playGround = document.getElementById('play-ground');
+    var PLAYERS = []; 
+    var myGameObject = {};
+    myGameObject.sp = 0.0; //speed position
+    myGameObject.sr = 0.0; //speed rotation
+
+    class gameObject{
+        constructor(id, color, position, rotation) {
+            this.id = id;
+            this.color = color;
+            this.position = position;
+            this.rotation = rotation;
+            this.gameObject = this.createGameObject();
+        }
+
+        createGameObject(){
+            var gameObject = document.createElement("DIV");
+            gameObject.setAttribute("id", this.id);
+            gameObject.classList.add("game-object");
+            document.getElementById('play-ground').appendChild(gameObject);
+            //return gameObject;
+        }
+    }
+
+
+
+    socket.on('register',function(data){
+        myGameObject.id = data.id;
+    });
+    socket.on('updatePlayerList',function(data){
+        var players = data.players;
+        //console.log(players);
+        var playerList = document.getElementById('player-list');
+        playerList.innerHTML = '';
+        for(var id in players){
+            var node = document.createElement("LI");
+            var textnode = document.createTextNode(players[id].id);
+            node.appendChild(textnode);
+            
+            var btn = document.createElement("button");
+            var textnode = document.createTextNode('invite');
+            btn.appendChild(textnode);
+            btn.setAttribute("onclick", "invitePlayer("+players[id].id+")");
+            node.appendChild(btn);
+
+            playerList.appendChild(node);
+        }
+    });
+    socket.on('invitation',function(data){
+        document.getElementById('logs').innerHTML = "New Invitation";
+        var popup = confirm(data.opId+" Invited You!");
+        if (popup == true) {
+            socket.emit('inviteAccept',{opId:data.opId});
+        } else {
+            document.getElementById('log').innerHTML = "You Rejected the Invitation";
+            socket.emit('inviteReject',{opId:data.opId});
+        }
+    })
+    socket.on('updateReadyList',function(data){
+        if(myGameObject.screen != 'ready')
+            changeScreen('ready');
+        var players = data.players;
+        //console.log(players);
+        var playerList = document.getElementById('ready-list');
+        playerList.innerHTML = '';
+        console.log(players);
+        for(var id in players){
+            var node = document.createElement("LI");
+            var textnode = document.createTextNode(players[id].id+'-->'+players[id].readyStatus);
+            node.appendChild(textnode);
+
+            playerList.appendChild(node);
+        }
+    })
+    socket.on('spawnPlayers',function(players){
+        changeScreen('play');
+        for(var id in players){
+            var color = 'red';
+            var position = players[id].position;
+            var rotation = players[id].rotation;
+            var player = new gameObject(id, color, position, rotation);
+            PLAYERS[id] = player;
+        }
+        //assigning data of my Object
+        myGameObject.position = players[myGameObject.id].position;
+        myGameObject.rotation = players[myGameObject.id].rotation;
+        updateMyObject();
+        update();
+    });
+    socket.on('updatePositions',function(dataPack){
+        //update positions
+        let stringData = '';
+        for(var id in dataPack){
+            PLAYERS[id].position = dataPack[id].position;
+            PLAYERS[id].rotation = dataPack[id].rotation;
+            stringData +=  '{id:'+id+',x:'+dataPack[id].position.x+',y:'+dataPack[id].position.y+',r:'+dataPack[id].rotation.x+'}';
+        }
+        document.getElementById('data').innerHTML = stringData;
+    });
+
+    function displayToast(msg){
+        alert(msg);
+    }
+
+    function invitePlayer(opId){
+        socket.emit('invitePlayer',{opId:opId});
+    }
+    function readyToStart(){
+        socket.emit('readyToStart');
+    }
+    function leaveLobby(){
+        socket.emit('leaveLobby');
+    }
+
+    function update(){
+        setInterval(function(){
+            for(let id in PLAYERS){
+                let player = PLAYERS[id];
+                let gameObject = document.getElementById(player.id);
+                var deg = player.rotation.x;
+                gameObject.style.transform  = "rotate("+deg+"deg)";
+                gameObject.style.left = player.position.x+"px";
+                gameObject.style.top  = player.position.y+"px";
+            }
+        },1000/30);
+    }
+
+    // function update(){
+    //     setInterval(function(){
+    //         ctx.
+    //         for(let id in PLAYERS){
+    //             let player = PLAYERS[id];
+    //             let gameObject = document.getElementById(player.id);
+    //             var deg = player.rotation.x;
+
+    //             ctx.rotate(deg * Math.PI / 180);
+    //             ctx.fillRect(player.position.x, player.position.y, 30, 20);
+
+    //             // gameObject.style.transform  = "rotate("+deg+"deg)";
+    //             // gameObject.style.marginLeft = player.position.x+"px";
+    //             // gameObject.style.marginTop  = player.position.y+"px";
+    //         }
+    //     },1000/30);
+    // }
+
+    function updateMyObject(){
+        setInterval(function(){
+            var dist = myGameObject.sp;
+            var deg  = myGameObject.rotation.x;
+            myGameObject.position.x += dist*Math.cos(deg * Math.PI / 180);
+            myGameObject.position.y += dist*Math.sin(deg * Math.PI / 180);
+            myGameObject.rotation.x += myGameObject.sr;
+
+            let myPack = {
+                position : myGameObject.position,
+                rotation : myGameObject.rotation
+            }
+            socket.emit('updatePosition',myPack);
+        },1000/30);
+    }
+
+    function moveForward() {
+        if(myGameObject.sp>-2)
+            myGameObject.sp -= 2.0;
+    }
+
+    function moveBack() {
+        if(myGameObject.sp<2)
+            myGameObject.sp += 2.0;
+    }
+
+    function rotateRight() {
+        if(myGameObject.sr<2)
+            myGameObject.sr += 2.0;
+    }
+
+    function rotateLeft() {
+        if(myGameObject.sr>-2)
+            myGameObject.sr -= 2.0;
+    }
+
+    document.addEventListener('keydown', (event) => {
+        switch(event.keyCode){
+            case 38://||119:
+                moveForward();
+                break;
+            case 40://||115:
+                moveBack();
+                break;
+            case 39://||100:
+                rotateRight();
+                break;
+            case 37://||97:
+                rotateLeft();
+                break;
+        }
+    }, false);
+
+    document.addEventListener('keyup', (event) => {
+        switch(event.keyCode){
+            case 38:
+                moveBack();
+                break;
+            case 40:
+                moveForward();
+                break;
+            case 39:
+                rotateLeft();
+                break;
+            case 37:
+                rotateRight();
+                break;
+        }
+    }, false);
+
+    changeScreen("menu");
+    function changeScreen(screen){
+        var menu  = document.getElementById('menu-screen');
+        var ready = document.getElementById('ready-screen');
+        var play  = document.getElementById('play-screen');
+        switch(screen){
+            case "menu" :
+                myGameObject.screen = 'menu';
+                menu.classList.remove('hidden');
+                ready.classList.add('hidden');
+                play.classList.add('hidden');
+                break;
+            case "ready" :
+                myGameObject.screen = 'ready';
+                menu.classList.add('hidden');
+                ready.classList.remove('hidden');
+                play.classList.add('hidden');
+                break;
+            case "play" :
+                myGameObject.screen = 'play';
+                menu.classList.add('hidden');
+                ready.classList.add('hidden');
+                play.classList.remove('hidden');
+                break;
+            default :
+                myGameObject.screen = 'menu';
+                menu.classList.remove('hidden');
+                ready.classList.add('hidden');
+                play.classList.add('hidden');
+        }
+    }
+
+</script>
+</body>
+</html>
